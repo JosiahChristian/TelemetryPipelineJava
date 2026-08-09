@@ -2,6 +2,7 @@ package com.telemetry.engine.controller;
 
 import com.telemetry.engine.model.TelemetryPacket;
 import com.telemetry.engine.service.TelemetryService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,7 +18,7 @@ public class TelemetryController {
 
     @PostMapping
     public ResponseEntity<String> receiveTelemetry(
-            @RequestBody TelemetryPacket packet
+            @Valid @RequestBody TelemetryPacket packet
     ) {
         telemetryService.processTelemetry(packet);
 

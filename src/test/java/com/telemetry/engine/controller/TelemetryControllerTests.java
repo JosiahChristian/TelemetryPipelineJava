@@ -24,6 +24,24 @@ class TelemetryControllerTests {
     @Autowired
     private ObjectMapper objectMapper;
 
+@Test
+void telemetryPostRejectsInvalidPacket() throws Exception {
+
+    TelemetryPacket packet =
+            new TelemetryPacket(
+                    "",
+                    -10.0,
+                    -5.0
+            );
+
+    mockMvc.perform(
+                    post("/api/telemetry")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(packet))
+            )
+            .andExpect(status().isBadRequest());
+}
+
     @Test
     void healthEndpointReturnsOperationalMessage() throws Exception {
         mockMvc.perform(get("/api/telemetry/health"))

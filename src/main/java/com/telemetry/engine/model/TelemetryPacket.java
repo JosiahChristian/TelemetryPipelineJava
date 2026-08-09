@@ -1,12 +1,21 @@
 package com.telemetry.engine.model;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.PositiveOrZero;
+
 import java.time.Instant;
 
 public class TelemetryPacket {
 
+    @NotBlank(message = "deviceId is required")
     private String deviceId;
+
+    @PositiveOrZero(message = "altitude must be zero or greater")
     private double altitude;
+
+    @PositiveOrZero(message = "velocity must be zero or greater")
     private double velocity;
+
     private Instant timestamp;
 
     public TelemetryPacket() {
