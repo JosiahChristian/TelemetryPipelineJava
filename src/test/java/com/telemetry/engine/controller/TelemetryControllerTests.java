@@ -12,6 +12,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
@@ -24,24 +25,6 @@ class TelemetryControllerTests {
     @Autowired
     private ObjectMapper objectMapper;
 
-@Test
-void telemetryPostRejectsInvalidPacket() throws Exception {
-
-    TelemetryPacket packet =
-            new TelemetryPacket(
-                    "",
-                    -10.0,
-                    -5.0
-            );
-
-    mockMvc.perform(
-                    post("/api/telemetry")
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(packet))
-            )
-            .andExpect(status().isBadRequest());
-}
-
     @Test
     void healthEndpointReturnsOperationalMessage() throws Exception {
         mockMvc.perform(get("/api/telemetry/health"))
@@ -51,7 +34,6 @@ void telemetryPostRejectsInvalidPacket() throws Exception {
 
     @Test
     void telemetryPostAcceptsPacket() throws Exception {
-
         TelemetryPacket packet =
                 new TelemetryPacket(
                         "DRONE-TEST-001",
@@ -70,5 +52,26 @@ void telemetryPostRejectsInvalidPacket() throws Exception {
                                 "Telemetry queued for processing from device: DRONE-TEST-001"
                         )
                 );
+    }
+
+    @Test
+    void telemetryPostRejectsInvalidPacket() throws Exception {
+        TelemetryPacket packet =
+                new TelemetryPacket(
+                        "",
+                        -10.0,
+                        -5.0
+                );
+
+        mockMvc.perform(
+                        post("/api/telemetry")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(packet))
+                )
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.error").value("Validation failed"))
+                .andExpect(jsonPath("$.message").exists())
+                .andExpect(jsonPath("$.path").value("/api/telemetry"));
     }
 }
