@@ -37,6 +37,16 @@ public class TelemetryController {
         );
     }
 
+    @GetMapping("/{id}")
+    public ResponseEntity<TelemetryPacket> getTelemetryById(
+            @PathVariable Long id
+    ) {
+        return telemetryService
+                .getTelemetryById(id)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
     @GetMapping("/health")
     public ResponseEntity<String> healthCheck() {
         return ResponseEntity.ok("Telemetry API is operational");

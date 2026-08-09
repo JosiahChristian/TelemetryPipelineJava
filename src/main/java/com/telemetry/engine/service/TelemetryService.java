@@ -6,6 +6,7 @@ import com.telemetry.engine.repository.TelemetryRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class TelemetryService {
@@ -39,5 +40,9 @@ public class TelemetryService {
 
     public List<TelemetryPacket> getAllTelemetry() {
         return telemetryRepository.findAll();
+    }
+
+    public Optional<TelemetryPacket> getTelemetryById(Long id) {
+        return telemetryRepository.findById(id);
     }
 }

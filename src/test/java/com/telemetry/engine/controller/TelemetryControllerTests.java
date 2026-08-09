@@ -2,6 +2,7 @@ package com.telemetry.engine.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.telemetry.engine.model.TelemetryPacket;
+import com.telemetry.engine.repository.TelemetryRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -24,6 +25,9 @@ class TelemetryControllerTests {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private TelemetryRepository telemetryRepository;
 
     @Test
     void healthEndpointReturnsOperationalMessage() throws Exception {
@@ -73,5 +77,33 @@ class TelemetryControllerTests {
                 .andExpect(jsonPath("$.error").value("Validation failed"))
                 .andExpect(jsonPath("$.message").exists())
                 .andExpect(jsonPath("$.path").value("/api/telemetry"));
+    }
+
+    @Test
+    void telemetryGetByIdReturnsPersistedPacket() throws Exception {
+        TelemetryPacket packet =
+                new TelemetryPacket(
+                        "DRONE-ID-001",
+                        200.0,
+                        55.0
+                );
+
+        TelemetryPacket savedPacket =
+                telemetryRepository.save(packet);
+
+        mockMvc.perform(
+                        get("/api/telemetry/" + savedPacket.getId())
+                )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(savedPacket.getId()))
+                .andExpect(jsonPath("$.deviceId").value("DRONE-ID-001"))
+                .andExpect(jsonPath("$.altitude").value(200.0))
+                .andExpect(jsonPath("$.velocity").value(55.0));
+    }
+
+    @Test
+    void telemetryGetByIdReturnsNotFoundForMissingPacket() throws Exception {
+        mockMvc.perform(get("/api/telemetry/999999"))
+                .andExpect(status().isNotFound());
     }
 }
