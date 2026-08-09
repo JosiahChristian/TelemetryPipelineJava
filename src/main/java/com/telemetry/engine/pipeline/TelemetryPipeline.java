@@ -1,6 +1,7 @@
 package com.telemetry.engine.pipeline;
 
 import com.telemetry.engine.model.TelemetryPacket;
+import com.telemetry.engine.repository.TelemetryRepository;
 import org.springframework.stereotype.Component;
 
 import java.util.concurrent.BlockingQueue;
@@ -13,7 +14,13 @@ public class TelemetryPipeline {
     private final BlockingQueue<TelemetryPacket> telemetryBuffer =
             new LinkedBlockingQueue<>(100);
 
+    private final TelemetryRepository telemetryRepository;
+
     private volatile boolean running = true;
+
+    public TelemetryPipeline(TelemetryRepository telemetryRepository) {
+        this.telemetryRepository = telemetryRepository;
+    }
 
     public void submit(TelemetryPacket packet) throws InterruptedException {
         telemetryBuffer.put(packet);
@@ -35,8 +42,10 @@ public class TelemetryPipeline {
 
                     if (packet != null) {
 
+                        telemetryRepository.save(packet);
+
                         System.out.println(
-                                "[CONSUMER] Processed telemetry from "
+                                "[CONSUMER] Persisted telemetry from "
                                 + packet.getDeviceId()
                                 + " | altitude="
                                 + packet.getAltitude()
@@ -44,9 +53,7 @@ public class TelemetryPipeline {
                                 + packet.getVelocity()
                                 + " -> [DB_SUCCESS]"
                         );
-
                     }
-
                 }
 
             } catch (InterruptedException e) {
@@ -59,5 +66,4 @@ public class TelemetryPipeline {
 
         pipelineConsumer.start();
     }
-
 }

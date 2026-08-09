@@ -1,11 +1,20 @@
 package com.telemetry.engine.model;
 
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.PositiveOrZero;
 
 import java.time.Instant;
 
+@Entity
 public class TelemetryPacket {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
     @NotBlank(message = "deviceId is required")
     private String deviceId;
@@ -31,6 +40,10 @@ public class TelemetryPacket {
         this.altitude = altitude;
         this.velocity = velocity;
         this.timestamp = Instant.now();
+    }
+
+    public Long getId() {
+        return id;
     }
 
     public String getDeviceId() {

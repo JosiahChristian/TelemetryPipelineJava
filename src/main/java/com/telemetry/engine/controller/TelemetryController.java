@@ -6,6 +6,8 @@ import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/telemetry")
 public class TelemetryController {
@@ -25,6 +27,13 @@ public class TelemetryController {
         return ResponseEntity.ok(
                 "Telemetry queued for processing from device: "
                         + packet.getDeviceId()
+        );
+    }
+
+    @GetMapping
+    public ResponseEntity<List<TelemetryPacket>> getAllTelemetry() {
+        return ResponseEntity.ok(
+                telemetryService.getAllTelemetry()
         );
     }
 
