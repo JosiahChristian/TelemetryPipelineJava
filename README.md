@@ -28,6 +28,7 @@ The current system demonstrates:
 - `BlockingQueue<TelemetryPacket>`
 - Spring Data JPA
 - Flyway versioned database migrations
+- OpenAPI 3 contract generation and Swagger UI
 - H2 relational database persistence
 - Automated Spring Boot, REST, and repository tests
 - Multi-stage Docker build with a non-root runtime
@@ -111,6 +112,12 @@ src/
 ```
 
 ## REST API
+
+Interactive API documentation is available while the service is running:
+
+- Swagger UI: `http://localhost:8080/swagger-ui.html`
+- OpenAPI JSON: `http://localhost:8080/v3/api-docs`
+- OpenAPI YAML: `http://localhost:8080/v3/api-docs.yaml`
 
 ### Health Check
 
@@ -380,7 +387,7 @@ Run the automated test suite with:
 mvn test
 ```
 
-The current suite contains **13 automated tests** covering:
+The current suite contains **15 automated tests** covering:
 
 - Spring application context initialization
 - API health endpoint
@@ -391,6 +398,8 @@ The current suite contains **13 automated tests** covering:
 - stale timestamp rejection
 - excessive future-clock-skew rejection
 - Flyway migration application and version verification
+- OpenAPI contract generation
+- Swagger UI availability
 - invalid telemetry rejection
 - structured validation responses
 - JPA repository persistence
@@ -454,7 +463,6 @@ Potential extensions include:
 - pagination and filtering
 - device-specific telemetry queries
 - DTO separation between API and persistence models
-- OpenAPI/Swagger documentation
 - authentication and authorization
 - telemetry aggregation and analytics
 - configurable worker pools

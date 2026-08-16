@@ -41,6 +41,23 @@ class TelemetryControllerTests {
     }
 
     @Test
+    void openApiDocumentDescribesTelemetryEndpoints() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.info.title")
+                        .value("Telemetry Pipeline API"))
+                .andExpect(jsonPath("$.info.version").value("1.0.0"))
+                .andExpect(jsonPath("$['paths']['/api/telemetry']").exists())
+                .andExpect(jsonPath("$['paths']['/api/telemetry/{id}']").exists());
+    }
+
+    @Test
+    void swaggerUiIsAvailable() throws Exception {
+        mockMvc.perform(get("/swagger-ui.html"))
+                .andExpect(status().is3xxRedirection());
+    }
+
+    @Test
     void telemetryPostAcceptsPacket() throws Exception {
         TelemetryPacket packet =
                 new TelemetryPacket(
