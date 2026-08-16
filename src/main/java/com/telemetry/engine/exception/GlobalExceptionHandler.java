@@ -13,6 +13,32 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(DuplicateTelemetryException.class)
+    public ResponseEntity<Map<String, Object>> handleDuplicateTelemetry(
+            DuplicateTelemetryException exception,
+            HttpServletRequest request
+    ) {
+        return errorResponse(
+                HttpStatus.CONFLICT,
+                "Duplicate telemetry",
+                exception.getMessage(),
+                request
+        );
+    }
+
+    @ExceptionHandler(OutOfOrderTelemetryException.class)
+    public ResponseEntity<Map<String, Object>> handleOutOfOrderTelemetry(
+            OutOfOrderTelemetryException exception,
+            HttpServletRequest request
+    ) {
+        return errorResponse(
+                HttpStatus.CONFLICT,
+                "Out-of-order telemetry",
+                exception.getMessage(),
+                request
+        );
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, Object>> handleValidationException(
             MethodArgumentNotValidException exception,
@@ -27,15 +53,26 @@ public class GlobalExceptionHandler {
                 .map(error -> error.getDefaultMessage())
                 .orElse("Invalid request");
 
-        Map<String, Object> errorResponse = new LinkedHashMap<>();
+        return errorResponse(
+                HttpStatus.BAD_REQUEST,
+                "Validation failed",
+                message,
+                request
+        );
+    }
 
-        errorResponse.put("status", HttpStatus.BAD_REQUEST.value());
-        errorResponse.put("error", "Validation failed");
-        errorResponse.put("message", message);
-        errorResponse.put("path", request.getRequestURI());
+    private ResponseEntity<Map<String, Object>> errorResponse(
+            HttpStatus status,
+            String error,
+            String message,
+            HttpServletRequest request
+    ) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("status", status.value());
+        body.put("error", error);
+        body.put("message", message);
+        body.put("path", request.getRequestURI());
 
-        return ResponseEntity
-                .status(HttpStatus.BAD_REQUEST)
-                .body(errorResponse);
+        return ResponseEntity.status(status).body(body);
     }
 }

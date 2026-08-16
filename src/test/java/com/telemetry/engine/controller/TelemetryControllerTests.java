@@ -82,6 +82,57 @@ class TelemetryControllerTests {
     }
 
     @Test
+    void telemetryPostRejectsDuplicatePacketId() throws Exception {
+        TelemetryPacket packet = new TelemetryPacket(
+                "DRONE-DUPLICATE-001",
+                100.0,
+                20.0
+        );
+        packet.setSequenceNumber(1L);
+
+        String request = objectMapper.writeValueAsString(packet);
+
+        mockMvc.perform(post("/api/telemetry")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(request))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/telemetry")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(request))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error").value("Duplicate telemetry"));
+    }
+
+    @Test
+    void telemetryPostRejectsOutOfOrderSequence() throws Exception {
+        TelemetryPacket newest = new TelemetryPacket(
+                "DRONE-ORDER-001",
+                100.0,
+                20.0
+        );
+        newest.setSequenceNumber(10L);
+
+        TelemetryPacket stale = new TelemetryPacket(
+                "DRONE-ORDER-001",
+                99.0,
+                19.0
+        );
+        stale.setSequenceNumber(9L);
+
+        mockMvc.perform(post("/api/telemetry")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(newest)))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/telemetry")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(stale)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error").value("Out-of-order telemetry"));
+    }
+
+    @Test
     void telemetryGetByIdReturnsPersistedPacket() throws Exception {
         TelemetryPacket packet =
                 new TelemetryPacket(

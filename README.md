@@ -16,6 +16,8 @@ The current system demonstrates:
 - REST API design
 - JSON request/response handling
 - Bean Validation
+- Idempotent packet admission
+- Per-device sequence enforcement
 - Global exception handling
 - Dependency injection
 - Service-layer architecture
@@ -136,9 +138,12 @@ Example request:
 
 ```json
 {
+  "packetId": "7aa38ca2-8ad7-4cd7-a55b-16687bdfa9f2",
   "deviceId": "DRONE-001",
+  "sequenceNumber": 42,
   "altitude": 120.5,
-  "velocity": 35.2
+  "velocity": 35.2,
+  "timestamp": "2026-08-16T23:45:00Z"
 }
 ```
 
@@ -151,6 +156,11 @@ Telemetry queued for processing from device: DRONE-001
 The packet is submitted to the bounded processing queue and asynchronously persisted. If the
 queue remains full for 250 milliseconds, the service rejects the submission instead of blocking
 an HTTP request indefinitely.
+
+`packetId` is an idempotency key. Replaying an accepted identifier returns `409 Conflict` rather
+than creating a second record. `sequenceNumber` is tracked independently for each device and
+checked against both in-flight admission state and persisted history; a sequence that does not
+advance beyond the last accepted value also returns `409 Conflict`.
 
 ### Retrieve All Telemetry
 
@@ -199,8 +209,11 @@ Incoming telemetry is validated before entering the processing pipeline.
 Current validation rules include:
 
 - `deviceId` must not be blank.
+- `packetId` must not be blank and must be unique.
+- `sequenceNumber` must be present and zero or greater.
 - `altitude` must be zero or greater.
 - `velocity` must be zero or greater.
+- `timestamp` must be present.
 
 Invalid telemetry returns:
 
@@ -301,11 +314,14 @@ Run the automated test suite with:
 mvn test
 ```
 
-The current suite contains **7 automated tests** covering:
+The current suite contains **10 automated tests** covering:
 
 - Spring application context initialization
 - API health endpoint
 - telemetry POST ingestion
+- duplicate-packet rejection
+- per-device out-of-order sequence rejection
+- persisted sequence-history lookup
 - invalid telemetry rejection
 - structured validation responses
 - JPA repository persistence
