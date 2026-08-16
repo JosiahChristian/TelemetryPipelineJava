@@ -330,7 +330,7 @@ Invoke-RestMethod http://localhost:8080/api/telemetry
 
 ## Engineering Concepts Demonstrated
 
-This repository is intended to demonstrate practical Java backend engineering concepts including:
+The service is built around practical Java backend engineering patterns including:
 
 - layered application architecture
 - RESTful API development
@@ -365,4 +365,4 @@ Potential extensions include:
 
 ## Purpose
 
-TelemetryPipelineJava serves as both a functional telemetry ingestion backend and an evolving demonstration of Java software engineering patterns applicable to backend systems, distributed data pipelines, cyber-physical systems, and real-time telemetry architectures.
+TelemetryPipelineJava is a functional telemetry-ingestion backend designed around patterns applicable to backend systems, distributed data pipelines, cyber-physical systems, and real-time telemetry architectures.
