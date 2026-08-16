@@ -10,6 +10,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.Instant;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -130,6 +132,40 @@ class TelemetryControllerTests {
                         .content(objectMapper.writeValueAsString(stale)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error").value("Out-of-order telemetry"));
+    }
+
+    @Test
+    void telemetryPostRejectsStaleTimestamp() throws Exception {
+        TelemetryPacket stale = new TelemetryPacket(
+                "DRONE-STALE-001",
+                100.0,
+                20.0
+        );
+        stale.setTimestamp(Instant.now().minusSeconds(600));
+
+        mockMvc.perform(post("/api/telemetry")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(stale)))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.error")
+                        .value("Invalid telemetry timestamp"));
+    }
+
+    @Test
+    void telemetryPostRejectsFutureTimestampBeyondClockSkew() throws Exception {
+        TelemetryPacket future = new TelemetryPacket(
+                "DRONE-FUTURE-001",
+                100.0,
+                20.0
+        );
+        future.setTimestamp(Instant.now().plusSeconds(120));
+
+        mockMvc.perform(post("/api/telemetry")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(future)))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.error")
+                        .value("Invalid telemetry timestamp"));
     }
 
     @Test

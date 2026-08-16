@@ -39,6 +39,19 @@ public class GlobalExceptionHandler {
         );
     }
 
+    @ExceptionHandler(TelemetryTimestampException.class)
+    public ResponseEntity<Map<String, Object>> handleTelemetryTimestamp(
+            TelemetryTimestampException exception,
+            HttpServletRequest request
+    ) {
+        return errorResponse(
+                HttpStatus.UNPROCESSABLE_ENTITY,
+                "Invalid telemetry timestamp",
+                exception.getMessage(),
+                request
+        );
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, Object>> handleValidationException(
             MethodArgumentNotValidException exception,

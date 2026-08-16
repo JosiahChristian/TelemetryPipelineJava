@@ -1,12 +1,15 @@
 package com.telemetry.engine.service;
 
-import com.telemetry.engine.model.TelemetryPacket;
+import com.telemetry.engine.config.TelemetryProperties;
 import com.telemetry.engine.exception.DuplicateTelemetryException;
 import com.telemetry.engine.exception.OutOfOrderTelemetryException;
+import com.telemetry.engine.exception.TelemetryTimestampException;
+import com.telemetry.engine.model.TelemetryPacket;
 import com.telemetry.engine.pipeline.TelemetryPipeline;
 import com.telemetry.engine.repository.TelemetryRepository;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -19,19 +22,24 @@ public class TelemetryService {
 
     private final TelemetryPipeline pipeline;
     private final TelemetryRepository telemetryRepository;
+    private final TelemetryProperties properties;
     private final Set<String> acceptedPacketIds = ConcurrentHashMap.newKeySet();
     private final ConcurrentMap<String, Long> highestSequenceByDevice =
             new ConcurrentHashMap<>();
 
     public TelemetryService(
             TelemetryPipeline pipeline,
-            TelemetryRepository telemetryRepository
+            TelemetryRepository telemetryRepository,
+            TelemetryProperties properties
     ) {
         this.pipeline = pipeline;
         this.telemetryRepository = telemetryRepository;
+        this.properties = properties;
     }
 
     public void processTelemetry(TelemetryPacket packet) {
+        validateTimestamp(packet);
+
         if (telemetryRepository.existsByPacketId(packet.getPacketId())
                 || !acceptedPacketIds.add(packet.getPacketId())) {
             throw new DuplicateTelemetryException(packet.getPacketId());
@@ -81,6 +89,24 @@ public class TelemetryService {
             throw new IllegalStateException(
                     "Telemetry processing was interrupted",
                     e
+            );
+        }
+    }
+
+    private void validateTimestamp(TelemetryPacket packet) {
+        Instant now = Instant.now();
+        Instant oldestAccepted = now.minus(properties.getMaxPacketAge());
+        Instant newestAccepted = now.plus(properties.getFutureClockSkew());
+
+        if (packet.getTimestamp().isBefore(oldestAccepted)) {
+            throw new TelemetryTimestampException(
+                    "Telemetry timestamp exceeds the maximum packet age"
+            );
+        }
+
+        if (packet.getTimestamp().isAfter(newestAccepted)) {
+            throw new TelemetryTimestampException(
+                    "Telemetry timestamp exceeds the permitted future clock skew"
             );
         }
     }

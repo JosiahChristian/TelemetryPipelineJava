@@ -1,5 +1,6 @@
 package com.telemetry.engine.pipeline;
 
+import com.telemetry.engine.config.TelemetryProperties;
 import com.telemetry.engine.model.TelemetryPacket;
 import com.telemetry.engine.repository.TelemetryRepository;
 import jakarta.annotation.PostConstruct;
@@ -16,25 +17,28 @@ import java.util.concurrent.TimeUnit;
 public class TelemetryPipeline {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(TelemetryPipeline.class);
-    private static final int CAPACITY = 100;
-    private static final long SUBMIT_TIMEOUT_MILLIS = 250;
-
-    private final BlockingQueue<TelemetryPacket> telemetryBuffer =
-            new LinkedBlockingQueue<>(CAPACITY);
-
+    private final BlockingQueue<TelemetryPacket> telemetryBuffer;
     private final TelemetryRepository telemetryRepository;
+    private final TelemetryProperties properties;
 
     private volatile boolean running;
     private Thread consumerThread;
 
-    public TelemetryPipeline(TelemetryRepository telemetryRepository) {
+    public TelemetryPipeline(
+            TelemetryRepository telemetryRepository,
+            TelemetryProperties properties
+    ) {
         this.telemetryRepository = telemetryRepository;
+        this.properties = properties;
+        this.telemetryBuffer = new LinkedBlockingQueue<>(
+                properties.getQueueCapacity()
+        );
     }
 
     public boolean submit(TelemetryPacket packet) throws InterruptedException {
         return telemetryBuffer.offer(
                 packet,
-                SUBMIT_TIMEOUT_MILLIS,
+                properties.getSubmitTimeout().toMillis(),
                 TimeUnit.MILLISECONDS
         );
     }
@@ -55,7 +59,7 @@ public class TelemetryPipeline {
 
                     TelemetryPacket packet =
                             telemetryBuffer.poll(
-                                    150,
+                                    properties.getPollInterval().toMillis(),
                                     TimeUnit.MILLISECONDS
                             );
 
@@ -90,7 +94,7 @@ public class TelemetryPipeline {
         }
 
         try {
-            consumerThread.join(1_000);
+            consumerThread.join(properties.getShutdownTimeout().toMillis());
 
             if (consumerThread.isAlive()) {
                 consumerThread.interrupt();
@@ -105,7 +109,7 @@ public class TelemetryPipeline {
     }
 
     public int getCapacity() {
-        return CAPACITY;
+        return properties.getQueueCapacity();
     }
 
     public boolean isRunning() {

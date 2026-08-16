@@ -1,0 +1,7 @@
+telemetry:
+  queue-capacity: ${TELEMETRY_QUEUE_CAPACITY:100}
+  submit-timeout: ${TELEMETRY_SUBMIT_TIMEOUT:250ms}
+  poll-interval: ${TELEMETRY_POLL_INTERVAL:150ms}
+  shutdown-timeout: ${TELEMETRY_SHUTDOWN_TIMEOUT:1s}
+  max-packet-age: ${TELEMETRY_MAX_PACKET_AGE:5m}
+  future-clock-skew: ${TELEMETRY_FUTURE_CLOCK_SKEW:30s}

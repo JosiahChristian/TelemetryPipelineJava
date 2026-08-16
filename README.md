@@ -18,6 +18,7 @@ The current system demonstrates:
 - Bean Validation
 - Idempotent packet admission
 - Per-device sequence enforcement
+- Configurable timestamp freshness and clock-skew enforcement
 - Global exception handling
 - Dependency injection
 - Service-layer architecture
@@ -162,6 +163,10 @@ than creating a second record. `sequenceNumber` is tracked independently for eac
 checked against both in-flight admission state and persisted history; a sequence that does not
 advance beyond the last accepted value also returns `409 Conflict`.
 
+Packets older than the configured maximum age or farther in the future than the permitted clock
+skew return `422 Unprocessable Entity`. This keeps delayed and incorrectly timestamped telemetry
+out of the active processing stream.
+
 ### Retrieve All Telemetry
 
 ```http
@@ -214,6 +219,20 @@ Current validation rules include:
 - `altitude` must be zero or greater.
 - `velocity` must be zero or greater.
 - `timestamp` must be present.
+
+## Runtime Configuration
+
+Operational limits are externalized through environment variables while retaining safe local
+defaults:
+
+| Environment variable | Default | Purpose |
+| --- | ---: | --- |
+| `TELEMETRY_QUEUE_CAPACITY` | `100` | Maximum buffered packets |
+| `TELEMETRY_SUBMIT_TIMEOUT` | `250ms` | Maximum admission wait when the queue is full |
+| `TELEMETRY_POLL_INTERVAL` | `150ms` | Worker queue polling interval |
+| `TELEMETRY_SHUTDOWN_TIMEOUT` | `1s` | Grace period for worker shutdown |
+| `TELEMETRY_MAX_PACKET_AGE` | `5m` | Oldest accepted source timestamp |
+| `TELEMETRY_FUTURE_CLOCK_SKEW` | `30s` | Permitted device clock lead |
 
 Invalid telemetry returns:
 
@@ -314,7 +333,7 @@ Run the automated test suite with:
 mvn test
 ```
 
-The current suite contains **10 automated tests** covering:
+The current suite contains **12 automated tests** covering:
 
 - Spring application context initialization
 - API health endpoint
@@ -322,6 +341,8 @@ The current suite contains **10 automated tests** covering:
 - duplicate-packet rejection
 - per-device out-of-order sequence rejection
 - persisted sequence-history lookup
+- stale timestamp rejection
+- excessive future-clock-skew rejection
 - invalid telemetry rejection
 - structured validation responses
 - JPA repository persistence
