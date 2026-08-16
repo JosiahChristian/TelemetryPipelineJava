@@ -22,13 +22,13 @@ public class TelemetryService {
         this.telemetryRepository = telemetryRepository;
     }
 
-    public void startTelemetryProcessing() {
-        pipeline.startConsumer();
-    }
-
     public void processTelemetry(TelemetryPacket packet) {
         try {
-            pipeline.submit(packet);
+            if (!pipeline.submit(packet)) {
+                throw new IllegalStateException(
+                        "Telemetry queue is at capacity; retry the request"
+                );
+            }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException(
@@ -44,5 +44,20 @@ public class TelemetryService {
 
     public Optional<TelemetryPacket> getTelemetryById(Long id) {
         return telemetryRepository.findById(id);
+    }
+
+    public TelemetryPipelineStatus getPipelineStatus() {
+        return new TelemetryPipelineStatus(
+                pipeline.isRunning(),
+                pipeline.getQueueDepth(),
+                pipeline.getCapacity()
+        );
+    }
+
+    public record TelemetryPipelineStatus(
+            boolean running,
+            int queueDepth,
+            int capacity
+    ) {
     }
 }

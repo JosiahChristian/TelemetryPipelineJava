@@ -19,7 +19,9 @@ The current system demonstrates:
 - Global exception handling
 - Dependency injection
 - Service-layer architecture
-- Concurrent producer/consumer processing
+- Lifecycle-managed producer/consumer processing
+- Bounded-queue backpressure
+- Observable pipeline health and queue depth
 - `BlockingQueue<TelemetryPacket>`
 - Spring Data JPA
 - H2 relational database persistence
@@ -111,11 +113,17 @@ src/
 GET /api/telemetry/health
 ```
 
-Response:
+Example response:
 
-```text
-Telemetry API is operational
+```json
+{
+  "running": true,
+  "queueDepth": 0,
+  "capacity": 100
+}
 ```
+
+The endpoint returns `503 Service Unavailable` when the persistence worker is not running.
 
 ### Submit Telemetry
 
@@ -140,7 +148,9 @@ Example response:
 Telemetry queued for processing from device: DRONE-001
 ```
 
-The packet is submitted to the concurrent processing queue and asynchronously persisted.
+The packet is submitted to the bounded processing queue and asynchronously persisted. If the
+queue remains full for 250 milliseconds, the service rejects the submission instead of blocking
+an HTTP request indefinitely.
 
 ### Retrieve All Telemetry
 
@@ -227,7 +237,9 @@ LinkedBlockingQueue
 
 This creates a producer/consumer architecture in which REST requests act as telemetry producers while a background worker consumes queued packets.
 
-The queue provides thread-safe coordination between request processing and persistence.
+The queue provides thread-safe coordination between request processing and persistence. Spring
+starts and stops the named persistence worker with the application lifecycle, allowing queued
+packets a brief opportunity to drain during shutdown.
 
 ## Persistence
 

@@ -2,6 +2,7 @@ package com.telemetry.engine.controller;
 
 import com.telemetry.engine.model.TelemetryPacket;
 import com.telemetry.engine.service.TelemetryService;
+import com.telemetry.engine.service.TelemetryService.TelemetryPipelineStatus;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -48,7 +49,13 @@ public class TelemetryController {
     }
 
     @GetMapping("/health")
-    public ResponseEntity<String> healthCheck() {
-        return ResponseEntity.ok("Telemetry API is operational");
+    public ResponseEntity<TelemetryPipelineStatus> healthCheck() {
+        TelemetryPipelineStatus status = telemetryService.getPipelineStatus();
+
+        if (!status.running()) {
+            return ResponseEntity.status(503).body(status);
+        }
+
+        return ResponseEntity.ok(status);
     }
 }

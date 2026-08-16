@@ -30,10 +30,12 @@ class TelemetryControllerTests {
     private TelemetryRepository telemetryRepository;
 
     @Test
-    void healthEndpointReturnsOperationalMessage() throws Exception {
+    void healthEndpointReturnsPipelineStatus() throws Exception {
         mockMvc.perform(get("/api/telemetry/health"))
                 .andExpect(status().isOk())
-                .andExpect(content().string("Telemetry API is operational"));
+                .andExpect(jsonPath("$.running").value(true))
+                .andExpect(jsonPath("$.queueDepth").isNumber())
+                .andExpect(jsonPath("$.capacity").value(100));
     }
 
     @Test
