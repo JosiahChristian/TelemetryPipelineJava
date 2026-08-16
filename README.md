@@ -27,6 +27,7 @@ The current system demonstrates:
 - Observable pipeline health and queue depth
 - `BlockingQueue<TelemetryPacket>`
 - Spring Data JPA
+- Flyway versioned database migrations
 - H2 relational database persistence
 - Automated Spring Boot, REST, and repository tests
 - Multi-stage Docker build with a non-root runtime
@@ -292,6 +293,19 @@ providing standard persistence operations while keeping database access separate
 
 H2 is currently used as an embedded development database, allowing the persistence architecture to run without requiring an external database server.
 
+### Schema Management
+
+Flyway owns database schema creation and evolution. The initial migration creates the telemetry
+table, its packet-id uniqueness constraint, and a device/sequence index used by ordering checks:
+
+```text
+src/main/resources/db/migration/V1__create_telemetry_packet.sql
+```
+
+Hibernate runs in `validate` mode, so application startup fails when the entity model and migrated
+schema disagree. New schema changes must be added as forward-only `V2__...`, `V3__...`, and later
+migrations instead of relying on automatic DDL generation.
+
 ## Building the Project
 
 Requirements:
@@ -366,7 +380,7 @@ Run the automated test suite with:
 mvn test
 ```
 
-The current suite contains **12 automated tests** covering:
+The current suite contains **13 automated tests** covering:
 
 - Spring application context initialization
 - API health endpoint
@@ -376,6 +390,7 @@ The current suite contains **12 automated tests** covering:
 - persisted sequence-history lookup
 - stale timestamp rejection
 - excessive future-clock-skew rejection
+- Flyway migration application and version verification
 - invalid telemetry rejection
 - structured validation responses
 - JPA repository persistence
@@ -424,6 +439,7 @@ The service is built around practical Java backend engineering patterns includin
 - thread-safe concurrent data structures
 - producer/consumer architecture
 - relational persistence
+- version-controlled schema migrations
 - repository abstraction
 - automated integration testing
 - Maven build and dependency management
@@ -435,7 +451,6 @@ The service is built around practical Java backend engineering patterns includin
 Potential extensions include:
 
 - PostgreSQL persistence
-- database migrations
 - pagination and filtering
 - device-specific telemetry queries
 - DTO separation between API and persistence models
