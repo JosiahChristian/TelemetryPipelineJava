@@ -23,3 +23,32 @@ jobs:
 
       - name: Build and test with Maven
         run: mvn --batch-mode clean verify
+
+  container-build:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build container image
+        run: docker build --tag telemetry-pipeline-java:ci .
+
+      - name: Inspect container user
+        run: |
+          test "$(docker image inspect telemetry-pipeline-java:ci --format '{{.Config.User}}')" = "telemetry"
+
+      - name: Smoke test container health
+        run: |
+          docker run --detach --name telemetry-pipeline-ci -p 8080:8080 telemetry-pipeline-java:ci
+          for attempt in {1..30}; do
+            if curl --fail --silent http://localhost:8080/api/telemetry/health >/dev/null; then
+              docker rm --force telemetry-pipeline-ci
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs telemetry-pipeline-ci
+          docker rm --force telemetry-pipeline-ci
+          exit 1

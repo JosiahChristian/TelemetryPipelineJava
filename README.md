@@ -29,6 +29,7 @@ The current system demonstrates:
 - Spring Data JPA
 - H2 relational database persistence
 - Automated Spring Boot, REST, and repository tests
+- Multi-stage Docker build with a non-root runtime
 
 ## Architecture
 
@@ -325,6 +326,38 @@ The API will be available locally at:
 http://localhost:8080
 ```
 
+### Run with Docker
+
+Build the production-style container image:
+
+```bash
+docker build -t telemetry-pipeline-java:local .
+```
+
+Run the service:
+
+```bash
+docker run --rm \
+  --name telemetry-pipeline \
+  -p 8080:8080 \
+  telemetry-pipeline-java:local
+```
+
+Runtime policy can be overridden without rebuilding the image:
+
+```bash
+docker run --rm \
+  -p 8080:8080 \
+  -e TELEMETRY_QUEUE_CAPACITY=500 \
+  -e TELEMETRY_MAX_PACKET_AGE=10m \
+  telemetry-pipeline-java:local
+```
+
+The final image contains only the Java 21 runtime and packaged application, runs as the unprivileged
+`telemetry` user, exposes port `8080`, and includes a health check against the pipeline status
+endpoint. H2 remains the development database at this checkpoint; durable PostgreSQL deployment
+is intentionally handled as a later milestone.
+
 ## Testing
 
 Run the automated test suite with:
@@ -394,6 +427,8 @@ The service is built around practical Java backend engineering patterns includin
 - repository abstraction
 - automated integration testing
 - Maven build and dependency management
+- reproducible container packaging
+- non-root container execution
 
 ## Future Development
 
@@ -405,7 +440,6 @@ Potential extensions include:
 - device-specific telemetry queries
 - DTO separation between API and persistence models
 - OpenAPI/Swagger documentation
-- Docker containerization
 - authentication and authorization
 - telemetry aggregation and analytics
 - configurable worker pools
