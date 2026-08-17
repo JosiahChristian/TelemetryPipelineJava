@@ -29,10 +29,8 @@ public class TelemetryPacket {
     @PositiveOrZero(message = "sequenceNumber must be zero or greater")
     private Long sequenceNumber;
 
-    @PositiveOrZero(message = "altitude must be zero or greater")
     private double altitude;
 
-    @PositiveOrZero(message = "velocity must be zero or greater")
     private double velocity;
 
     @NotNull(message = "timestamp is required")
