@@ -31,6 +31,7 @@ The current system demonstrates:
 - OpenAPI 3 contract generation and Swagger UI
 - Actuator health and Prometheus-compatible operational metrics
 - H2 relational database persistence
+- PostgreSQL production deployment profile
 - Automated Spring Boot, REST, and repository tests
 - Multi-stage Docker build with a non-root runtime
 
@@ -303,6 +304,7 @@ Telemetry is persisted using:
 - Spring Data JPA
 - Hibernate
 - H2 Database
+- PostgreSQL through the `postgres` profile
 
 `TelemetryRepository` extends:
 
@@ -313,6 +315,9 @@ JpaRepository<TelemetryPacket, Long>
 providing standard persistence operations while keeping database access separated from the controller and service layers.
 
 H2 is currently used as an embedded development database, allowing the persistence architecture to run without requiring an external database server.
+
+PostgreSQL is available through the `postgres` Spring profile. The same Flyway migration history
+is applied in both environments, while Hibernate validates the resulting schema.
 
 ### Schema Management
 
@@ -390,8 +395,30 @@ docker run --rm \
 
 The final image contains only the Java 21 runtime and packaged application, runs as the unprivileged
 `telemetry` user, exposes port `8080`, and includes a health check against the pipeline status
-endpoint. H2 remains the development database at this checkpoint; durable PostgreSQL deployment
-is intentionally handled as a later milestone.
+endpoint. H2 remains the default development database; durable PostgreSQL deployment is available
+through the deployment profile below.
+
+### Run with PostgreSQL
+
+Start the application and a durable PostgreSQL database together:
+
+```bash
+docker compose up --build
+```
+
+The Compose stack waits for PostgreSQL readiness before starting the application and retains data
+in the named `telemetry-postgres-data` volume. The bundled credentials are local-development
+defaults; deployment environments should supply their own database credentials.
+
+To run the packaged application against an existing PostgreSQL instance:
+
+```bash
+SPRING_PROFILES_ACTIVE=postgres \
+DATABASE_URL=jdbc:postgresql://localhost:5432/telemetry \
+DATABASE_USERNAME=telemetry \
+DATABASE_PASSWORD=change-me \
+java -jar target/telemetry-pipeline-java-1.0.0.jar
+```
 
 ## Testing
 
@@ -416,6 +443,10 @@ The current suite contains **17 automated tests** covering:
 - Swagger UI availability
 - Actuator health aggregation
 - Prometheus telemetry metrics exposure
+
+CI runs the suite once with the default H2 development database and again with the PostgreSQL
+profile against a real PostgreSQL service container. The repository tests are configured not to
+replace the selected datasource, ensuring that PostgreSQL verification exercises PostgreSQL.
 - invalid telemetry rejection
 - structured validation responses
 - JPA repository persistence
@@ -476,7 +507,6 @@ The service is built around practical Java backend engineering patterns includin
 
 Potential extensions include:
 
-- PostgreSQL persistence
 - pagination and filtering
 - device-specific telemetry queries
 - DTO separation between API and persistence models
