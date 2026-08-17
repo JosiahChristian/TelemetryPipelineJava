@@ -15,9 +15,7 @@ public record TelemetryRequest(
         @NotNull(message = "sequenceNumber is required")
         @PositiveOrZero(message = "sequenceNumber must be zero or greater")
         Long sequenceNumber,
-        @PositiveOrZero(message = "altitude must be zero or greater")
         double altitude,
-        @PositiveOrZero(message = "velocity must be zero or greater")
         double velocity,
         @NotNull(message = "timestamp is required")
         Instant timestamp
