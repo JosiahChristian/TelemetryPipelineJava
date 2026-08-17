@@ -7,6 +7,8 @@ import com.telemetry.engine.exception.TelemetryTimestampException;
 import com.telemetry.engine.model.TelemetryPacket;
 import com.telemetry.engine.pipeline.TelemetryPipeline;
 import com.telemetry.engine.repository.TelemetryRepository;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -23,6 +25,11 @@ public class TelemetryService {
     private final TelemetryPipeline pipeline;
     private final TelemetryRepository telemetryRepository;
     private final TelemetryProperties properties;
+    private final Counter acceptedPackets;
+    private final Counter duplicatePackets;
+    private final Counter outOfOrderPackets;
+    private final Counter invalidTimestampPackets;
+    private final Counter backpressureRejections;
     private final Set<String> acceptedPacketIds = ConcurrentHashMap.newKeySet();
     private final ConcurrentMap<String, Long> highestSequenceByDevice =
             new ConcurrentHashMap<>();
@@ -30,11 +37,17 @@ public class TelemetryService {
     public TelemetryService(
             TelemetryPipeline pipeline,
             TelemetryRepository telemetryRepository,
-            TelemetryProperties properties
+            TelemetryProperties properties,
+            MeterRegistry meterRegistry
     ) {
         this.pipeline = pipeline;
         this.telemetryRepository = telemetryRepository;
         this.properties = properties;
+        this.acceptedPackets = admissionCounter(meterRegistry, "accepted");
+        this.duplicatePackets = admissionCounter(meterRegistry, "duplicate");
+        this.outOfOrderPackets = admissionCounter(meterRegistry, "out_of_order");
+        this.invalidTimestampPackets = admissionCounter(meterRegistry, "invalid_timestamp");
+        this.backpressureRejections = admissionCounter(meterRegistry, "backpressure");
     }
 
     public void processTelemetry(TelemetryPacket packet) {
@@ -42,6 +55,7 @@ public class TelemetryService {
 
         if (telemetryRepository.existsByPacketId(packet.getPacketId())
                 || !acceptedPacketIds.add(packet.getPacketId())) {
+            duplicatePackets.increment();
             throw new DuplicateTelemetryException(packet.getPacketId());
         }
 
@@ -73,12 +87,14 @@ public class TelemetryService {
             });
         } catch (OutOfOrderTelemetryException exception) {
             acceptedPacketIds.remove(packet.getPacketId());
+            outOfOrderPackets.increment();
             throw exception;
         }
 
         try {
             if (!pipeline.submit(packet)) {
                 rollbackAdmission(packet, previousSequence.get());
+                backpressureRejections.increment();
                 throw new IllegalStateException(
                         "Telemetry queue is at capacity; retry the request"
                 );
@@ -91,6 +107,15 @@ public class TelemetryService {
                     e
             );
         }
+
+        acceptedPackets.increment();
+    }
+
+    private Counter admissionCounter(MeterRegistry meterRegistry, String outcome) {
+        return Counter.builder("telemetry.admission.total")
+                .description("Telemetry packet admission outcomes")
+                .tag("outcome", outcome)
+                .register(meterRegistry);
     }
 
     private void validateTimestamp(TelemetryPacket packet) {
@@ -99,12 +124,14 @@ public class TelemetryService {
         Instant newestAccepted = now.plus(properties.getFutureClockSkew());
 
         if (packet.getTimestamp().isBefore(oldestAccepted)) {
+            invalidTimestampPackets.increment();
             throw new TelemetryTimestampException(
                     "Telemetry timestamp exceeds the maximum packet age"
             );
         }
 
         if (packet.getTimestamp().isAfter(newestAccepted)) {
+            invalidTimestampPackets.increment();
             throw new TelemetryTimestampException(
                     "Telemetry timestamp exceeds the permitted future clock skew"
             );

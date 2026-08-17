@@ -5,6 +5,9 @@ import com.telemetry.engine.model.TelemetryPacket;
 import com.telemetry.engine.repository.TelemetryRepository;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -20,19 +23,39 @@ public class TelemetryPipeline {
     private final BlockingQueue<TelemetryPacket> telemetryBuffer;
     private final TelemetryRepository telemetryRepository;
     private final TelemetryProperties properties;
+    private final Counter persistedPackets;
+    private final Counter persistenceFailures;
 
     private volatile boolean running;
     private Thread consumerThread;
 
     public TelemetryPipeline(
             TelemetryRepository telemetryRepository,
-            TelemetryProperties properties
+            TelemetryProperties properties,
+            MeterRegistry meterRegistry
     ) {
         this.telemetryRepository = telemetryRepository;
         this.properties = properties;
         this.telemetryBuffer = new LinkedBlockingQueue<>(
                 properties.getQueueCapacity()
         );
+        this.persistedPackets = meterRegistry.counter(
+                "telemetry.persistence.total",
+                "outcome",
+                "success"
+        );
+        this.persistenceFailures = meterRegistry.counter(
+                "telemetry.persistence.total",
+                "outcome",
+                "failure"
+        );
+        Gauge.builder(
+                        "telemetry.queue.depth",
+                        telemetryBuffer,
+                        BlockingQueue::size
+                )
+                .description("Current number of packets awaiting persistence")
+                .register(meterRegistry);
     }
 
     public boolean submit(TelemetryPacket packet) throws InterruptedException {
@@ -65,12 +88,7 @@ public class TelemetryPipeline {
 
                     if (packet != null) {
 
-                        telemetryRepository.save(packet);
-
-                        LOGGER.debug(
-                                "Persisted telemetry from device {}",
-                                packet.getDeviceId()
-                        );
+                        persist(packet);
                     }
                 }
 
@@ -83,6 +101,25 @@ public class TelemetryPipeline {
         }, "telemetry-persistence-worker");
 
         consumerThread.start();
+    }
+
+    private void persist(TelemetryPacket packet) {
+        try {
+            telemetryRepository.save(packet);
+            persistedPackets.increment();
+            LOGGER.debug(
+                    "Persisted telemetry from device {}",
+                    packet.getDeviceId()
+            );
+        } catch (RuntimeException exception) {
+            persistenceFailures.increment();
+            LOGGER.error(
+                    "Unable to persist telemetry packet {} from device {}",
+                    packet.getPacketId(),
+                    packet.getDeviceId(),
+                    exception
+            );
+        }
     }
 
     @PreDestroy

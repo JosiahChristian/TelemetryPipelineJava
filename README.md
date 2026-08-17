@@ -29,6 +29,7 @@ The current system demonstrates:
 - Spring Data JPA
 - Flyway versioned database migrations
 - OpenAPI 3 contract generation and Swagger UI
+- Actuator health and Prometheus-compatible operational metrics
 - H2 relational database persistence
 - Automated Spring Boot, REST, and repository tests
 - Multi-stage Docker build with a non-root runtime
@@ -243,6 +244,19 @@ defaults:
 | `TELEMETRY_MAX_PACKET_AGE` | `5m` | Oldest accepted source timestamp |
 | `TELEMETRY_FUTURE_CLOCK_SKEW` | `30s` | Permitted device clock lead |
 
+## Observability
+
+Operational endpoints are available under Spring Boot Actuator:
+
+- Health: `GET /actuator/health`
+- Application information: `GET /actuator/info`
+- Metric inventory: `GET /actuator/metrics`
+- Prometheus exposition: `GET /actuator/prometheus`
+
+The application publishes queue depth, admission outcomes, and persistence outcomes. Admission
+counters distinguish accepted, duplicate, out-of-order, invalid-timestamp, and backpressure
+results. The Actuator health aggregate includes a worker-aware telemetry pipeline indicator.
+
 Invalid telemetry returns:
 
 ```text
@@ -387,7 +401,7 @@ Run the automated test suite with:
 mvn test
 ```
 
-The current suite contains **15 automated tests** covering:
+The current suite contains **17 automated tests** covering:
 
 - Spring application context initialization
 - API health endpoint
@@ -400,6 +414,8 @@ The current suite contains **15 automated tests** covering:
 - Flyway migration application and version verification
 - OpenAPI contract generation
 - Swagger UI availability
+- Actuator health aggregation
+- Prometheus telemetry metrics exposure
 - invalid telemetry rejection
 - structured validation responses
 - JPA repository persistence
@@ -454,6 +470,7 @@ The service is built around practical Java backend engineering patterns includin
 - Maven build and dependency management
 - reproducible container packaging
 - non-root container execution
+- health and metrics instrumentation
 
 ## Future Development
 
@@ -467,7 +484,6 @@ Potential extensions include:
 - telemetry aggregation and analytics
 - configurable worker pools
 - message-broker integration
-- production observability and metrics
 
 ## Purpose
 

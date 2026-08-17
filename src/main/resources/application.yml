@@ -13,3 +13,20 @@ spring:
     hibernate:
       ddl-auto: validate
     open-in-view: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: never
+  info:
+    env:
+      enabled: true
+
+info:
+  app:
+    name: TelemetryPipelineJava
+    version: 1.0.0
