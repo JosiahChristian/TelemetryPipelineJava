@@ -2,6 +2,8 @@ package com.telemetry.engine.repository;
 
 import com.telemetry.engine.model.TelemetryPacket;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.util.Optional;
 
@@ -13,4 +15,6 @@ public interface TelemetryRepository
     Optional<TelemetryPacket> findTopByDeviceIdOrderBySequenceNumberDesc(
             String deviceId
     );
+
+    Page<TelemetryPacket> findByDeviceId(String deviceId, Pageable pageable);
 }

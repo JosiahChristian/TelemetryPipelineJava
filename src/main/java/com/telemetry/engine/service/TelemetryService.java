@@ -1,5 +1,6 @@
 package com.telemetry.engine.service;
 
+import com.telemetry.engine.api.TelemetryResponse;
 import com.telemetry.engine.config.TelemetryProperties;
 import com.telemetry.engine.exception.DuplicateTelemetryException;
 import com.telemetry.engine.exception.OutOfOrderTelemetryException;
@@ -10,9 +11,10 @@ import com.telemetry.engine.repository.TelemetryRepository;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -158,8 +160,15 @@ public class TelemetryService {
         }
     }
 
-    public List<TelemetryPacket> getAllTelemetry() {
-        return telemetryRepository.findAll();
+    public Page<TelemetryResponse> searchTelemetry(
+            String deviceId,
+            Pageable pageable
+    ) {
+        Page<TelemetryPacket> packets = deviceId == null || deviceId.isBlank()
+                ? telemetryRepository.findAll(pageable)
+                : telemetryRepository.findByDeviceId(deviceId, pageable);
+
+        return packets.map(TelemetryResponse::from);
     }
 
     public Optional<TelemetryPacket> getTelemetryById(Long id) {

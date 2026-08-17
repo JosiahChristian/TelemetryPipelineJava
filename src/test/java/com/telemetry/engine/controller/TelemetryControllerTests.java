@@ -93,12 +93,11 @@ class TelemetryControllerTests {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(packet))
                 )
-                .andExpect(status().isOk())
-                .andExpect(
-                        content().string(
-                                "Telemetry queued for processing from device: DRONE-TEST-001"
-                        )
-                );
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.packetId").value(packet.getPacketId()))
+                .andExpect(jsonPath("$.deviceId").value("DRONE-TEST-001"))
+                .andExpect(jsonPath("$.sequenceNumber").value(0))
+                .andExpect(jsonPath("$.status").value("queued"));
     }
 
     @Test
@@ -136,7 +135,7 @@ class TelemetryControllerTests {
         mockMvc.perform(post("/api/telemetry")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(request))
-                .andExpect(status().isOk());
+                .andExpect(status().isAccepted());
 
         mockMvc.perform(post("/api/telemetry")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -164,7 +163,7 @@ class TelemetryControllerTests {
         mockMvc.perform(post("/api/telemetry")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(newest)))
-                .andExpect(status().isOk());
+                .andExpect(status().isAccepted());
 
         mockMvc.perform(post("/api/telemetry")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -227,6 +226,37 @@ class TelemetryControllerTests {
                 .andExpect(jsonPath("$.deviceId").value("DRONE-ID-001"))
                 .andExpect(jsonPath("$.altitude").value(200.0))
                 .andExpect(jsonPath("$.velocity").value(55.0));
+    }
+
+    @Test
+    void telemetryGetReturnsBoundedDeviceFilteredPage() throws Exception {
+        TelemetryPacket first = new TelemetryPacket(
+                "DRONE-PAGE-001",
+                200.0,
+                55.0
+        );
+        first.setSequenceNumber(1L);
+
+        TelemetryPacket second = new TelemetryPacket(
+                "DRONE-PAGE-001",
+                210.0,
+                57.0
+        );
+        second.setSequenceNumber(2L);
+
+        telemetryRepository.save(first);
+        telemetryRepository.save(second);
+
+        mockMvc.perform(get("/api/telemetry")
+                        .param("deviceId", "DRONE-PAGE-001")
+                        .param("page", "0")
+                        .param("size", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].deviceId")
+                        .value("DRONE-PAGE-001"))
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.size").value(1));
     }
 
     @Test

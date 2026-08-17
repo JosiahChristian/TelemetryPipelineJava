@@ -159,10 +159,15 @@ Example request:
 }
 ```
 
-Example response:
+Example response (`202 Accepted`):
 
-```text
-Telemetry queued for processing from device: DRONE-001
+```json
+{
+  "packetId": "7aa38ca2-8ad7-4cd7-a55b-16687bdfa9f2",
+  "deviceId": "DRONE-001",
+  "sequenceNumber": 42,
+  "status": "queued"
+}
 ```
 
 The packet is submitted to the bounded processing queue and asynchronously persisted. If the
@@ -178,24 +183,39 @@ Packets older than the configured maximum age or farther in the future than the 
 skew return `422 Unprocessable Entity`. This keeps delayed and incorrectly timestamped telemetry
 out of the active processing stream.
 
-### Retrieve All Telemetry
+### Retrieve Telemetry
 
 ```http
 GET /api/telemetry
 ```
 
+Results are paginated, capped at 100 records per page, sorted by timestamp descending by default,
+and can be filtered by device:
+
+```http
+GET /api/telemetry?deviceId=DRONE-001&page=0&size=25
+```
+
 Example response:
 
 ```json
-[
-  {
-    "id": 1,
-    "deviceId": "DRONE-001",
-    "altitude": 120.5,
-    "velocity": 35.2,
-    "timestamp": "2026-08-09T19:37:47.487340Z"
-  }
-]
+{
+  "content": [
+    {
+      "id": 1,
+      "packetId": "7aa38ca2-8ad7-4cd7-a55b-16687bdfa9f2",
+      "deviceId": "DRONE-001",
+      "sequenceNumber": 42,
+      "altitude": 120.5,
+      "velocity": 35.2,
+      "timestamp": "2026-08-16T23:45:00Z"
+    }
+  ],
+  "totalElements": 1,
+  "totalPages": 1,
+  "size": 25,
+  "number": 0
+}
 ```
 
 ### Retrieve Telemetry by ID
@@ -428,7 +448,7 @@ Run the automated test suite with:
 mvn test
 ```
 
-The current suite contains **17 automated tests** covering:
+The current suite contains **18 automated tests** covering:
 
 - Spring application context initialization
 - API health endpoint
@@ -443,6 +463,7 @@ The current suite contains **17 automated tests** covering:
 - Swagger UI availability
 - Actuator health aggregation
 - Prometheus telemetry metrics exposure
+- bounded, device-filtered pagination
 
 CI runs the suite once with the default H2 development database and again with the PostgreSQL
 profile against a real PostgreSQL service container. The repository tests are configured not to
@@ -486,6 +507,7 @@ Invoke-RestMethod http://localhost:8080/api/telemetry
 The service is built around practical Java backend engineering patterns including:
 
 - layered application architecture
+- API/persistence model separation
 - RESTful API development
 - object-oriented design
 - dependency injection
@@ -507,9 +529,6 @@ The service is built around practical Java backend engineering patterns includin
 
 Potential extensions include:
 
-- pagination and filtering
-- device-specific telemetry queries
-- DTO separation between API and persistence models
 - authentication and authorization
 - telemetry aggregation and analytics
 - configurable worker pools
