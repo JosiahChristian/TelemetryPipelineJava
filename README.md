@@ -80,10 +80,12 @@ Content-Type: application/json
   "deviceId": "sensor-001",
   "sequenceNumber": 42,
   "altitude": 120.5,
-  "velocity": 35.2,
+  "velocity": -3.2,
   "timestamp": "2026-08-16T23:45:00Z"
 }
 ```
+
+Altitude and velocity are intentionally signed state values. This permits domains such as vertical-flight telemetry where descent velocity or altitude relative to a selected datum can be negative. Sequence numbers remain non-negative and strictly advancing per device after initial admission.
 
 Accepted packets return `202 Accepted`. Duplicate packet IDs and non-advancing device sequences return `409 Conflict`. Packets outside configured age or future-clock-skew limits return `422 Unprocessable Entity`. Queue availability failures return a retryable `503 Service Unavailable` response.
 
@@ -111,6 +113,28 @@ H2 is the default development database. A PostgreSQL profile is included for dur
 
 Spring Boot Actuator exposes health, application information, metric inventory, and Prometheus-compatible telemetry. Application metrics include queue depth, admission outcomes, and persistence outcomes, with admission counters distinguishing accepted, duplicate, out-of-order, invalid-timestamp, and backpressure cases.
 
+## Verified AeroCPS Contract Compatibility
+
+`AeroCPSTelemetry` now contains a tested adapter that maps the versioned `AeroCPSSimulation` vertical-flight samples into this API contract:
+
+```text
+AeroCPSSimulation CSV
+        |
+        v
+AeroCPSTelemetry parser
+        |
+        v
+TelemetryPipelineJava adapter
+        |
+        | POST /api/telemetry
+        v
+TelemetryPipelineJava
+```
+
+The adapter maps simulator `step` to `sequenceNumber`, preserves signed altitude and vertical velocity, and derives deterministic packet IDs from a run identifier plus simulation step. The backend regression suite explicitly verifies admission of signed aerospace state.
+
+This is contract-level and client-path interoperability. The public repositories do not claim a continuously deployed hosted backend; runtime forwarding requires a reachable TelemetryPipelineJava instance and appropriate browser/network deployment configuration.
+
 ## Verification
 
 Run the local suite with:
@@ -119,14 +143,7 @@ Run the local suite with:
 mvn test
 ```
 
-The current suite contains **19 automated tests** covering application startup, database migration, repository behavior, REST behavior, validation, idempotency, sequence enforcement, timestamp policy, OpenAPI exposure, metrics, pagination, and backpressure handling.
-
-The latest verified GitHub Actions `build-and-test` run reports:
-
-```text
-Tests run: 19, Failures: 0, Errors: 0, Skipped: 0
-BUILD SUCCESS
-```
+The automated suite covers application startup, database migration, repository behavior, REST behavior, validation, idempotency, sequence enforcement, signed aerospace state, timestamp policy, OpenAPI exposure, metrics, pagination, and backpressure handling.
 
 CI additionally runs the application tests against PostgreSQL and builds and smoke-tests the production-style container image.
 
@@ -157,8 +174,8 @@ docker compose up --build
 
 ## Scope
 
-TelemetryPipelineJava is a general-purpose telemetry-ingestion backend. Its current public implementation is not presented as being directly integrated with AeroCPSSimulation or any other specific simulator. Cross-repository telemetry integration should be claimed only when the schemas and runtime path are explicitly wired and verified.
+TelemetryPipelineJava is a general-purpose telemetry-ingestion backend. Its public implementation now has a verified adapter contract from the AeroCPS telemetry stack, while remaining usable independently of any specific simulator.
 
 ## Future Development
 
-Potential extensions include authentication and authorization, telemetry aggregation and analytics, configurable worker pools, message-broker integration, and verified adapters for specific simulation telemetry contracts.
+Potential extensions include authentication and authorization, telemetry aggregation and analytics, configurable worker pools, message-broker integration, additional domain adapters, and deployment-level end-to-end integration tests.
