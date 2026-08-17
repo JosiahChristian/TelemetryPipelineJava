@@ -172,7 +172,8 @@ Example response (`202 Accepted`):
 
 The packet is submitted to the bounded processing queue and asynchronously persisted. If the
 queue remains full for 250 milliseconds, the service rejects the submission instead of blocking
-an HTTP request indefinitely.
+an HTTP request indefinitely. Capacity and interruption failures return a structured
+`503 Service Unavailable` response and roll back admission state so the client can retry safely.
 
 `packetId` is an idempotency key. Replaying an accepted identifier returns `409 Conflict` rather
 than creating a second record. `sequenceNumber` is tracked independently for each device and
@@ -448,7 +449,7 @@ Run the automated test suite with:
 mvn test
 ```
 
-The current suite contains **18 automated tests** covering:
+The current suite contains **19 automated tests** covering:
 
 - Spring application context initialization
 - API health endpoint
@@ -464,6 +465,7 @@ The current suite contains **18 automated tests** covering:
 - Actuator health aggregation
 - Prometheus telemetry metrics exposure
 - bounded, device-filtered pagination
+- backpressure rejection and safe admission rollback
 
 CI runs the suite once with the default H2 development database and again with the PostgreSQL
 profile against a real PostgreSQL service container. The repository tests are configured not to

@@ -52,6 +52,19 @@ public class GlobalExceptionHandler {
         );
     }
 
+    @ExceptionHandler(TelemetryUnavailableException.class)
+    public ResponseEntity<Map<String, Object>> handleTelemetryUnavailable(
+            TelemetryUnavailableException exception,
+            HttpServletRequest request
+    ) {
+        return errorResponse(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "Telemetry pipeline unavailable",
+                exception.getMessage(),
+                request
+        );
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, Object>> handleValidationException(
             MethodArgumentNotValidException exception,

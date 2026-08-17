@@ -5,6 +5,7 @@ import com.telemetry.engine.config.TelemetryProperties;
 import com.telemetry.engine.exception.DuplicateTelemetryException;
 import com.telemetry.engine.exception.OutOfOrderTelemetryException;
 import com.telemetry.engine.exception.TelemetryTimestampException;
+import com.telemetry.engine.exception.TelemetryUnavailableException;
 import com.telemetry.engine.model.TelemetryPacket;
 import com.telemetry.engine.pipeline.TelemetryPipeline;
 import com.telemetry.engine.repository.TelemetryRepository;
@@ -97,14 +98,14 @@ public class TelemetryService {
             if (!pipeline.submit(packet)) {
                 rollbackAdmission(packet, previousSequence.get());
                 backpressureRejections.increment();
-                throw new IllegalStateException(
+                throw new TelemetryUnavailableException(
                         "Telemetry queue is at capacity; retry the request"
                 );
             }
         } catch (InterruptedException e) {
             rollbackAdmission(packet, previousSequence.get());
             Thread.currentThread().interrupt();
-            throw new IllegalStateException(
+            throw new TelemetryUnavailableException(
                     "Telemetry processing was interrupted",
                     e
             );
