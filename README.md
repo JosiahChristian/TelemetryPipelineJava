@@ -1,39 +1,29 @@
 # TelemetryPipelineJava
 
-A Spring Boot backend for asynchronous telemetry ingestion, validation, processing, persistence, and retrieval.
+A Java 21 / Spring Boot backend for validated telemetry ingestion, asynchronous processing, persistence, retrieval, and operational observability.
 
-TelemetryPipelineJava demonstrates how incoming device telemetry can move through a layered Java backend architecture: HTTP requests are accepted through a REST API, validated, submitted to a thread-safe processing queue, consumed asynchronously, and persisted through Spring Data JPA.
+## What It Demonstrates
 
-## Overview
+TelemetryPipelineJava began as a producer/consumer concurrency exercise and has evolved into a layered telemetry service with explicit admission rules, bounded backpressure, durable persistence options, schema migration, API documentation, metrics, container packaging, and automated verification.
 
-The project began as a Java producer/consumer concurrency implementation and has evolved into a complete Spring Boot telemetry backend.
+Core capabilities include:
 
-The current system demonstrates:
-
-- Java 21
-- Spring Boot
-- Maven
-- REST API design
-- JSON request/response handling
-- Bean Validation
-- Idempotent packet admission
-- Per-device sequence enforcement
-- Configurable timestamp freshness and clock-skew enforcement
-- Global exception handling
-- Dependency injection
-- Service-layer architecture
-- Lifecycle-managed producer/consumer processing
-- Bounded-queue backpressure
-- Observable pipeline health and queue depth
-- `BlockingQueue<TelemetryPacket>`
+- Java 21 and Spring Boot
+- REST ingestion and paginated retrieval
+- Bean Validation and structured API errors
+- idempotent packet admission
+- per-device sequence enforcement
+- timestamp freshness and clock-skew enforcement
+- bounded `BlockingQueue` producer/consumer processing
+- lifecycle-managed asynchronous persistence
 - Spring Data JPA
-- Flyway versioned database migrations
-- OpenAPI 3 contract generation and Swagger UI
-- Actuator health and Prometheus-compatible operational metrics
-- H2 relational database persistence
-- PostgreSQL production deployment profile
-- Automated Spring Boot, REST, and repository tests
-- Multi-stage Docker build with a non-root runtime
+- Flyway versioned migrations
+- H2 development persistence
+- PostgreSQL deployment profile
+- OpenAPI / Swagger UI
+- Spring Boot Actuator and Prometheus-compatible metrics
+- Docker packaging with a non-root runtime
+- automated H2 and PostgreSQL verification
 
 ## Architecture
 
@@ -47,22 +37,20 @@ Telemetry Client
 |      REST API          |
 +------------------------+
        |
-       | validated TelemetryPacket
+       | validated request
        v
 +------------------------+
 |   TelemetryService     |
-|   Application Layer    |
+| admission / sequencing |
 +------------------------+
        |
        v
 +------------------------+
 |   TelemetryPipeline    |
-|                        |
-| BlockingQueue<         |
-|   TelemetryPacket>     |
+| bounded BlockingQueue  |
 +------------------------+
        |
-       | asynchronous consumer
+       | async consumer
        v
 +------------------------+
 | TelemetryRepository    |
@@ -71,87 +59,25 @@ Telemetry Client
        |
        v
 +------------------------+
-|      H2 Database       |
+|   H2 / PostgreSQL      |
 +------------------------+
 ```
 
-The HTTP request thread does not directly perform the persistence operation. Incoming telemetry is submitted to a thread-safe queue, allowing ingestion and backend processing to remain decoupled.
+The HTTP request path does not directly perform persistence. Accepted packets enter a bounded queue and are consumed by a background worker. Admission state is rolled back when a queue submission fails so clients can retry safely.
 
-## Project Structure
+## Telemetry Contract
 
-```text
-src/
-├── main/
-│   └── java/
-│       └── com/
-│           └── telemetry/
-│               └── engine/
-│                   ├── TelemetryApplication.java
-│                   ├── TelemetryStartupRunner.java
-│                   ├── controller/
-│                   │   └── TelemetryController.java
-│                   ├── exception/
-│                   │   └── GlobalExceptionHandler.java
-│                   ├── model/
-│                   │   └── TelemetryPacket.java
-│                   ├── pipeline/
-│                   │   └── TelemetryPipeline.java
-│                   ├── repository/
-│                   │   └── TelemetryRepository.java
-│                   └── service/
-│                       └── TelemetryService.java
-│
-└── test/
-    └── java/
-        └── com/
-            └── telemetry/
-                └── engine/
-                    ├── TelemetryApplicationTests.java
-                    ├── controller/
-                    │   └── TelemetryControllerTests.java
-                    └── repository/
-                        └── TelemetryRepositoryTests.java
-```
-
-## REST API
-
-Interactive API documentation is available while the service is running:
-
-- Swagger UI: `http://localhost:8080/swagger-ui.html`
-- OpenAPI JSON: `http://localhost:8080/v3/api-docs`
-- OpenAPI YAML: `http://localhost:8080/v3/api-docs.yaml`
-
-### Health Check
-
-```http
-GET /api/telemetry/health
-```
-
-Example response:
-
-```json
-{
-  "running": true,
-  "queueDepth": 0,
-  "capacity": 100
-}
-```
-
-The endpoint returns `503 Service Unavailable` when the persistence worker is not running.
-
-### Submit Telemetry
+Example request:
 
 ```http
 POST /api/telemetry
 Content-Type: application/json
 ```
 
-Example request:
-
 ```json
 {
   "packetId": "7aa38ca2-8ad7-4cd7-a55b-16687bdfa9f2",
-  "deviceId": "DRONE-001",
+  "deviceId": "sensor-001",
   "sequenceNumber": 42,
   "altitude": 120.5,
   "velocity": 35.2,
@@ -159,383 +85,80 @@ Example request:
 }
 ```
 
-Example response (`202 Accepted`):
+Accepted packets return `202 Accepted`. Duplicate packet IDs and non-advancing device sequences return `409 Conflict`. Packets outside configured age or future-clock-skew limits return `422 Unprocessable Entity`. Queue availability failures return a retryable `503 Service Unavailable` response.
 
-```json
-{
-  "packetId": "7aa38ca2-8ad7-4cd7-a55b-16687bdfa9f2",
-  "deviceId": "DRONE-001",
-  "sequenceNumber": 42,
-  "status": "queued"
-}
-```
-
-The packet is submitted to the bounded processing queue and asynchronously persisted. If the
-queue remains full for 250 milliseconds, the service rejects the submission instead of blocking
-an HTTP request indefinitely. Capacity and interruption failures return a structured
-`503 Service Unavailable` response and roll back admission state so the client can retry safely.
-
-`packetId` is an idempotency key. Replaying an accepted identifier returns `409 Conflict` rather
-than creating a second record. `sequenceNumber` is tracked independently for each device and
-checked against both in-flight admission state and persisted history; a sequence that does not
-advance beyond the last accepted value also returns `409 Conflict`.
-
-Packets older than the configured maximum age or farther in the future than the permitted clock
-skew return `422 Unprocessable Entity`. This keeps delayed and incorrectly timestamped telemetry
-out of the active processing stream.
-
-### Retrieve Telemetry
+Retrieval is paginated and can be filtered by device:
 
 ```http
-GET /api/telemetry
+GET /api/telemetry?deviceId=sensor-001&page=0&size=25
 ```
 
-Results are paginated, capped at 100 records per page, sorted by timestamp descending by default,
-and can be filtered by device:
+Operational health is available at:
 
 ```http
-GET /api/telemetry?deviceId=DRONE-001&page=0&size=25
+GET /api/telemetry/health
 ```
 
-Example response:
+Interactive API documentation is exposed at `/swagger-ui.html`, with OpenAPI documents at `/v3/api-docs` and `/v3/api-docs.yaml`.
 
-```json
-{
-  "content": [
-    {
-      "id": 1,
-      "packetId": "7aa38ca2-8ad7-4cd7-a55b-16687bdfa9f2",
-      "deviceId": "DRONE-001",
-      "sequenceNumber": 42,
-      "altitude": 120.5,
-      "velocity": 35.2,
-      "timestamp": "2026-08-16T23:45:00Z"
-    }
-  ],
-  "totalElements": 1,
-  "totalPages": 1,
-  "size": 25,
-  "number": 0
-}
-```
+## Persistence and Schema Management
 
-### Retrieve Telemetry by ID
+Flyway owns database schema creation and evolution. Hibernate runs in validation mode so startup fails if the entity model and migrated schema disagree.
 
-```http
-GET /api/telemetry/{id}
-```
-
-Example:
-
-```http
-GET /api/telemetry/1
-```
-
-A matching record returns `200 OK`.
-
-A nonexistent record returns:
-
-```text
-404 Not Found
-```
-
-## Validation
-
-Incoming telemetry is validated before entering the processing pipeline.
-
-Current validation rules include:
-
-- `deviceId` must not be blank.
-- `packetId` must not be blank and must be unique.
-- `sequenceNumber` must be present and zero or greater.
-- `altitude` must be zero or greater.
-- `velocity` must be zero or greater.
-- `timestamp` must be present.
-
-## Runtime Configuration
-
-Operational limits are externalized through environment variables while retaining safe local
-defaults:
-
-| Environment variable | Default | Purpose |
-| --- | ---: | --- |
-| `TELEMETRY_QUEUE_CAPACITY` | `100` | Maximum buffered packets |
-| `TELEMETRY_SUBMIT_TIMEOUT` | `250ms` | Maximum admission wait when the queue is full |
-| `TELEMETRY_POLL_INTERVAL` | `150ms` | Worker queue polling interval |
-| `TELEMETRY_SHUTDOWN_TIMEOUT` | `1s` | Grace period for worker shutdown |
-| `TELEMETRY_MAX_PACKET_AGE` | `5m` | Oldest accepted source timestamp |
-| `TELEMETRY_FUTURE_CLOCK_SKEW` | `30s` | Permitted device clock lead |
+H2 is the default development database. A PostgreSQL profile is included for durable deployment and is exercised in CI against a real PostgreSQL service container.
 
 ## Observability
 
-Operational endpoints are available under Spring Boot Actuator:
+Spring Boot Actuator exposes health, application information, metric inventory, and Prometheus-compatible telemetry. Application metrics include queue depth, admission outcomes, and persistence outcomes, with admission counters distinguishing accepted, duplicate, out-of-order, invalid-timestamp, and backpressure cases.
 
-- Health: `GET /actuator/health`
-- Application information: `GET /actuator/info`
-- Metric inventory: `GET /actuator/metrics`
-- Prometheus exposition: `GET /actuator/prometheus`
+## Verification
 
-The application publishes queue depth, admission outcomes, and persistence outcomes. Admission
-counters distinguish accepted, duplicate, out-of-order, invalid-timestamp, and backpressure
-results. The Actuator health aggregate includes a worker-aware telemetry pipeline indicator.
+Run the local suite with:
 
-Invalid telemetry returns:
+```bash
+mvn test
+```
+
+The current suite contains **19 automated tests** covering application startup, database migration, repository behavior, REST behavior, validation, idempotency, sequence enforcement, timestamp policy, OpenAPI exposure, metrics, pagination, and backpressure handling.
+
+The latest verified GitHub Actions `build-and-test` run reports:
 
 ```text
-400 Bad Request
+Tests run: 19, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
 ```
 
-with a structured JSON error response.
+CI additionally runs the application tests against PostgreSQL and builds and smoke-tests the production-style container image.
 
-Example:
-
-```json
-{
-  "status": 400,
-  "error": "Validation failed",
-  "message": "deviceId is required",
-  "path": "/api/telemetry"
-}
-```
-
-## Concurrent Processing
-
-The ingestion engine uses Java's concurrency utilities:
-
-```java
-BlockingQueue<TelemetryPacket>
-```
-
-backed by:
-
-```java
-LinkedBlockingQueue
-```
-
-This creates a producer/consumer architecture in which REST requests act as telemetry producers while a background worker consumes queued packets.
-
-The queue provides thread-safe coordination between request processing and persistence. Spring
-starts and stops the named persistence worker with the application lifecycle, allowing queued
-packets a brief opportunity to drain during shutdown.
-
-## Persistence
-
-Telemetry is persisted using:
-
-- Spring Data JPA
-- Hibernate
-- H2 Database
-- PostgreSQL through the `postgres` profile
-
-`TelemetryRepository` extends:
-
-```java
-JpaRepository<TelemetryPacket, Long>
-```
-
-providing standard persistence operations while keeping database access separated from the controller and service layers.
-
-H2 is currently used as an embedded development database, allowing the persistence architecture to run without requiring an external database server.
-
-PostgreSQL is available through the `postgres` Spring profile. The same Flyway migration history
-is applied in both environments, while Hibernate validates the resulting schema.
-
-### Schema Management
-
-Flyway owns database schema creation and evolution. The initial migration creates the telemetry
-table, its packet-id uniqueness constraint, and a device/sequence index used by ordering checks:
-
-```text
-src/main/resources/db/migration/V1__create_telemetry_packet.sql
-```
-
-Hibernate runs in `validate` mode, so application startup fails when the entity model and migrated
-schema disagree. New schema changes must be added as forward-only `V2__...`, `V3__...`, and later
-migrations instead of relying on automatic DDL generation.
-
-## Building the Project
+## Build and Run
 
 Requirements:
 
 - Java 21+
 - Apache Maven
 
-Verify your environment:
-
-```bash
-java -version
-mvn -version
-```
-
-Build the application:
+Build:
 
 ```bash
 mvn clean package
 ```
 
-## Running the Application
-
-Run the packaged Spring Boot application:
+Run locally:
 
 ```bash
 java -jar target/telemetry-pipeline-java-1.0.0.jar
 ```
 
-The API will be available locally at:
-
-```text
-http://localhost:8080
-```
-
-### Run with Docker
-
-Build the production-style container image:
-
-```bash
-docker build -t telemetry-pipeline-java:local .
-```
-
-Run the service:
-
-```bash
-docker run --rm \
-  --name telemetry-pipeline \
-  -p 8080:8080 \
-  telemetry-pipeline-java:local
-```
-
-Runtime policy can be overridden without rebuilding the image:
-
-```bash
-docker run --rm \
-  -p 8080:8080 \
-  -e TELEMETRY_QUEUE_CAPACITY=500 \
-  -e TELEMETRY_MAX_PACKET_AGE=10m \
-  telemetry-pipeline-java:local
-```
-
-The final image contains only the Java 21 runtime and packaged application, runs as the unprivileged
-`telemetry` user, exposes port `8080`, and includes a health check against the pipeline status
-endpoint. H2 remains the default development database; durable PostgreSQL deployment is available
-through the deployment profile below.
-
-### Run with PostgreSQL
-
-Start the application and a durable PostgreSQL database together:
+Run the containerized development stack with PostgreSQL:
 
 ```bash
 docker compose up --build
 ```
 
-The Compose stack waits for PostgreSQL readiness before starting the application and retains data
-in the named `telemetry-postgres-data` volume. The bundled credentials are local-development
-defaults; deployment environments should supply their own database credentials.
+## Scope
 
-To run the packaged application against an existing PostgreSQL instance:
-
-```bash
-SPRING_PROFILES_ACTIVE=postgres \
-DATABASE_URL=jdbc:postgresql://localhost:5432/telemetry \
-DATABASE_USERNAME=telemetry \
-DATABASE_PASSWORD=change-me \
-java -jar target/telemetry-pipeline-java-1.0.0.jar
-```
-
-## Testing
-
-Run the automated test suite with:
-
-```bash
-mvn test
-```
-
-The current suite contains **19 automated tests** covering:
-
-- Spring application context initialization
-- API health endpoint
-- telemetry POST ingestion
-- duplicate-packet rejection
-- per-device out-of-order sequence rejection
-- persisted sequence-history lookup
-- stale timestamp rejection
-- excessive future-clock-skew rejection
-- Flyway migration application and version verification
-- OpenAPI contract generation
-- Swagger UI availability
-- Actuator health aggregation
-- Prometheus telemetry metrics exposure
-- bounded, device-filtered pagination
-- backpressure rejection and safe admission rollback
-
-CI runs the suite once with the default H2 development database and again with the PostgreSQL
-profile against a real PostgreSQL service container. The repository tests are configured not to
-replace the selected datasource, ensuring that PostgreSQL verification exercises PostgreSQL.
-- invalid telemetry rejection
-- structured validation responses
-- JPA repository persistence
-- telemetry lookup behavior, including missing records
-
-Current verified result:
-
-```text
-Tests run: 7, Failures: 0, Errors: 0
-BUILD SUCCESS
-```
-
-## Example PowerShell Request
-
-```powershell
-$body = @{
-    deviceId = "DRONE-001"
-    altitude = 120.5
-    velocity = 35.2
-} | ConvertTo-Json
-
-Invoke-RestMethod `
-    -Uri http://localhost:8080/api/telemetry `
-    -Method Post `
-    -ContentType "application/json" `
-    -Body $body
-```
-
-Retrieve stored telemetry:
-
-```powershell
-Invoke-RestMethod http://localhost:8080/api/telemetry
-```
-
-## Engineering Concepts Demonstrated
-
-The service is built around practical Java backend engineering patterns including:
-
-- layered application architecture
-- API/persistence model separation
-- RESTful API development
-- object-oriented design
-- dependency injection
-- request validation
-- centralized exception handling
-- asynchronous processing
-- thread-safe concurrent data structures
-- producer/consumer architecture
-- relational persistence
-- version-controlled schema migrations
-- repository abstraction
-- automated integration testing
-- Maven build and dependency management
-- reproducible container packaging
-- non-root container execution
-- health and metrics instrumentation
+TelemetryPipelineJava is a general-purpose telemetry-ingestion backend. Its current public implementation is not presented as being directly integrated with AeroCPSSimulation or any other specific simulator. Cross-repository telemetry integration should be claimed only when the schemas and runtime path are explicitly wired and verified.
 
 ## Future Development
 
-Potential extensions include:
-
-- authentication and authorization
-- telemetry aggregation and analytics
-- configurable worker pools
-- message-broker integration
-
-## Purpose
-
-TelemetryPipelineJava is a functional telemetry-ingestion backend designed around patterns applicable to backend systems, distributed data pipelines, cyber-physical systems, and real-time telemetry architectures.
+Potential extensions include authentication and authorization, telemetry aggregation and analytics, configurable worker pools, message-broker integration, and verified adapters for specific simulation telemetry contracts.
