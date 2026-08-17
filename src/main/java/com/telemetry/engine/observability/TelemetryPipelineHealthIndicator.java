@@ -5,7 +5,7 @@ import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.HealthIndicator;
 import org.springframework.stereotype.Component;
 
-@Component("telemetryPipeline")
+@Component("telemetryPipelineHealth")
 public class TelemetryPipelineHealthIndicator implements HealthIndicator {
 
     private final TelemetryPipeline pipeline;
