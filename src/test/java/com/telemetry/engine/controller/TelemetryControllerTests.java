@@ -101,6 +101,24 @@ class TelemetryControllerTests {
     }
 
     @Test
+    void telemetryPostAcceptsSignedAerospaceState() throws Exception {
+        TelemetryPacket packet = new TelemetryPacket(
+                "AEROCPS-SIGNED-001",
+                -12.5,
+                -3.4
+        );
+        packet.setSequenceNumber(1L);
+
+        mockMvc.perform(post("/api/telemetry")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(packet)))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.deviceId").value("AEROCPS-SIGNED-001"))
+                .andExpect(jsonPath("$.sequenceNumber").value(1))
+                .andExpect(jsonPath("$.status").value("queued"));
+    }
+
+    @Test
     void telemetryPostRejectsInvalidPacket() throws Exception {
         TelemetryPacket packet =
                 new TelemetryPacket(
